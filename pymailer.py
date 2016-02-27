@@ -8,7 +8,7 @@ import smtplib
 import sys
 
 from datetime import datetime
-from email import message
+from email.mime.text import MIMEText
 from time import sleep
 
 import config # Our file config.py
@@ -89,7 +89,7 @@ class PyMailer():
         Open, parse and substitute placeholders with recipient data.
         """
         try:
-            html_file = open(self.html_path, 'rt')
+            html_file = open(self.html_path, 'rt', encoding='utf-8')
         except IOError:
             raise IOError("Invalid or missing html file path.")
 
@@ -117,13 +117,10 @@ class PyMailer():
         html_content = self._html_parser(recipient_data)
 
         # instatiate the email object and assign headers
-        email_message = message.Message()
-        email_message.add_header('From', sender)
-        email_message.add_header('To', recipient)
-        email_message.add_header('Subject', self.subject)
-        email_message.add_header('MIME-Version', '1.0')
-        email_message.add_header('Content-Type', 'text/html; charset=utf-8')
-        email_message.set_payload(html_content)
+        email_message = MIMEText(html_content, 'html')
+        email_message['From'] = sender
+        email_message['To'] = recipient
+        email_message['Subject'] = self.subject
 
         return email_message.as_string()
 
