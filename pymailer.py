@@ -74,7 +74,7 @@ class PyMailer():
         Write failed recipient_data to csv file to be retried again later.
         """
         try:
-            csv_file = open(config.CSV_RETRY_FILENAME, 'wb+')
+            csv_file = open(config.CSV_RETRY_FILENAME, 'wb+', encoding='utf-8')
         except IOError:
             raise IOError("Invalid or missing csv file path.")
         csv_writer = csv.writer(csv_file)
@@ -133,7 +133,7 @@ class PyMailer():
             csv_path = self.csv_path
 
         try:
-            csv_file = open(csv_path, 'r+t')
+            csv_file = open(csv_path, 'r+t', encoding='utf-8')
         except IOError:
             raise IOError("Invalid or missing csv file path.")
 
