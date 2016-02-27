@@ -196,7 +196,7 @@ class PyMailer():
                 recipient = recipient_data.get('email')
             sender = "%s <%s>" % (self.from_name, self.from_email)
 
-            for nb in range(0,self.nb_emails_per_recipient):
+            for nb in range(0, self.nb_emails_per_recipient):
                 print("Sending to %s..." % recipient)
                 try:
                     # send the actual email
@@ -244,6 +244,7 @@ class PyMailer():
 
     def count_recipients(self, csv_path=None):
         return len(self._parse_csv(csv_path))
+
 
 def main(sys_args):
     open(config.CSV_RETRY_FILENAME, 'wb').close() # Creates a new one or overwrite the old one
