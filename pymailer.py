@@ -281,7 +281,7 @@ def main(sys_args):
             sys.exit()
 
     elif action == '-t':
-        if raw_input("You are about to send a test mail to all recipients as specified in config.py. Do you want to continue (yes/no)? ") == 'yes':
+        if input("You are about to send a test mail to all recipients as specified in config.py. Do you want to continue (yes/no)? ") == 'yes':
             pymailer.send_test()
         else:
             print("Aborted.")
