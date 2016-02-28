@@ -109,17 +109,13 @@ class PyMailer():
         """
         Form the html email, including mimetype and headers.
         """
-        # form the recipient and sender headers
-        recipient = "%s <%s>" % (recipient_data.get('name'), recipient_data.get('email'))
-        sender = "%s <%s>" % (self.from_name, self.from_email)
-
         # get the html content
         html_content = self._html_parser(recipient_data)
 
         # instatiate the email object and assign headers
         email_message = MIMEText(html_content, 'html')
-        email_message['From'] = sender
-        email_message['To'] = recipient
+        email_message['From'] = recipient_data.get('sender')
+        email_message['To'] = recipient_data.get('recipient')
         email_message['Subject'] = self.subject
 
         return email_message.as_string()
@@ -190,16 +186,18 @@ class PyMailer():
         failed_recipients = 0
 
         for recipient_data in recipient_list:
+            if recipient_data.get('name'):
+                recipient_data['recipient'] = "%s <%s>" % (recipient_data.get('name'), recipient_data.get('email'))
+            else:
+                recipient_data['recipient'] = recipient_data.get('email')
+
+            recipient_data['sender'] = "%s <%s>" % (self.from_name, self.from_email)
+
             # instantiate the required vars to send email
             message = self._form_email(recipient_data)
-            if recipient_data.get('name'):
-                recipient = "%s <%s>" % (recipient_data.get('name'), recipient_data.get('email'))
-            else:
-                recipient = recipient_data.get('email')
-            sender = "%s <%s>" % (self.from_name, self.from_email)
 
             for nb in range(0, self.nb_emails_per_recipient):
-                print("Sending to %s..." % recipient)
+                print("Sending to %s..." % recipient_data.get('recipient'))
                 try:
                     # send the actual email
                     
@@ -217,10 +215,10 @@ class PyMailer():
                     if config.SMTP_USER and config.SMTP_PASSWORD:
                         smtp_server.login(config.SMTP_USER, config.SMTP_PASSWORD)
 
-                    smtp_server.sendmail(sender, recipient, message)
+                    smtp_server.sendmail(recipient_data.get('sender'), recipient_data.get('recipient'), message)
                     smtp_server.close()
                     # save the last recipient to the stats file incase the process fails
-                    self._stats("LAST RECIPIENT: %s" % recipient)
+                    self._stats("LAST RECIPIENT: %s" % recipient_data.get('recipient'))
 
                     # allow the system to sleep for .25 secs to take load off the SMTP server
                     sleep(0.25)
