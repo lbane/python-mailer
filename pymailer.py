@@ -138,26 +138,28 @@ class PyMailer():
             raise IOError("Invalid or missing csv file path.")
 
         csv_reader = csv.reader(csv_file)
-        recipient_data_list = []
+
+        """
+        Invalid emails ignored
+        """
+        variables_names = []
+        recipients_list = []
         for i, row in enumerate(csv_reader):
-            # test indexes exist and validate email address
-            try:
-                recipient_name = row[0]
-                recipient_email = self._validate_email(row[1])
-            except IndexError:
-                recipient_name = ''
-                recipient_email = None
+            # Get header keys
+            if i == 0:
+                for cell in row:
+                    variables_names.append(cell)
+                continue
 
-            # print recipient_name, recipient_email
-
-            # log missing email addresses and line number
-            if not recipient_email:
-                logging.error("Recipient email missing in line %s" % i)
-            else:
-                recipient_data_list.append({
-                    'name': recipient_name,
-                    'email': recipient_email,
-                })
+            # Get all variables
+            variables = {}
+            for j, var_name in enumerate(variables_names):
+                if var_name == 'email':
+                    if self._validate_email(row[j]):
+                        variables[var_name] = row[j]
+                        recipients_list.append(variables)
+                else:
+                    variables[var_name] = row[j]
 
         # clear the contents of the resend csv file
         if is_resend:
@@ -165,7 +167,7 @@ class PyMailer():
 
         csv_file.close()
 
-        return recipient_data_list
+        return recipients_list
 
     def send(self, retry_count=0, recipient_list=None):
         """
