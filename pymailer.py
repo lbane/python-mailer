@@ -220,7 +220,7 @@ class PyMailer():
                     self._stats("LAST RECIPIENT: %s" % recipient_data.get('recipient'))
 
                     # allow the system to sleep for .25 secs to take load off the SMTP server
-                    sleep(0.25)
+                    sleep(1)
                 except smtplib.SMTPException as e:
                     print("EXCEPTION")
                     print(repr(e))
@@ -268,7 +268,7 @@ def main(sys_args):
     pymailer = PyMailer(html_path, csv_path, subject)
     
     if action == '-s':
-        if raw_input("You are about to send to %s recipients. Do you want to continue (yes/no)? " % pymailer.count_recipients()) == 'yes':
+        if input("You are about to send to %s recipients. Do you want to continue (yes/no)? " % pymailer.count_recipients()) == 'yes':
             # save the csv file used to the stats file
             pymailer._stats("CSV USED: %s" % csv_path)
 
