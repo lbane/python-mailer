@@ -6,6 +6,9 @@ import os
 import re
 import smtplib
 import sys
+import string
+import ssl
+import email
 
 from datetime import datetime
 from email.mime.text import MIMEText
@@ -28,6 +31,8 @@ class PyMailer():
         self.from_name               = kwargs.get('from_name', config.FROM_NAME)
         self.from_email              = kwargs.get('to_name', config.FROM_EMAIL)
         self.nb_emails_per_recipient = kwargs.get('nb_emails_per_recipient', config.NB_EMAILS_PER_RECIPIENT)
+        self.html_template           = None
+        self.sslcontext              = None
 
     def _stats(self, message):
         """
@@ -111,7 +116,7 @@ class PyMailer():
         email_message['From'] = recipient_data.get('sender')
         email_message['To'] = recipient_data.get('recipient')
         email_message['Subject'] = self.subject
-
+        
         return email_message.as_string()
 
     def _parse_csv(self, csv_path=None):
@@ -213,8 +218,6 @@ class PyMailer():
                     self._stats("LAST RECIPIENT: %s" % recipient_data.get('recipient'))
 
                     # allow the system to sleep for .25 secs to take load off the SMTP server
-                finally:
-                    smtp_server.quit()
                 except smtplib.SMTPException as e:
                     print("EXCEPTION")
                     print(repr(e))
@@ -224,6 +227,8 @@ class PyMailer():
                     # save the number of failed recipients to the stats file
                     failed_recipients = failed_recipients + 1
                     self._stats("FAILED RECIPIENTS: %s" % failed_recipients)
+                finally:
+                    smtp_server.quit()
                 sleep(config.SLEEP_TIME)
 
     def send_test(self):
