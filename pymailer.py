@@ -12,6 +12,7 @@ from email.mime.text import MIMEText
 from time import sleep
 
 import config # Our file config.py
+import argparse
 
 # setup logging to specified log file
 logging.basicConfig(filename=config.LOG_FILENAME, level=logging.DEBUG)
@@ -72,37 +73,31 @@ class PyMailer():
         """
         Write failed recipient_data to csv file to be retried again later.
         """
-        try:
-            csv_file = open(config.CSV_RETRY_FILENAME, 'w+', encoding='utf-8', newline='')
-        except IOError:
-            raise IOError("Invalid or missing csv file path.")
-        csv_writer = csv.writer(csv_file)
-        csv_writer.writerow([
-            recipient_data.get('name'),
-            recipient_data.get('email')
-        ])
-        csv_file.close()
+        with open(config.CSV_RETRY_FILENAME, 'w+', encoding='utf-8', newline='') as csv_file:
+            csv_writer = csv.writer(csv_file)
+            csv_writer.writerow([
+                recipient_data.get('name'),
+                recipient_data.get('email')
+            ])
 
     def _html_parser(self, recipient_data):
         """
         Open, parse and substitute placeholders with recipient data.
         """
-        try:
-            html_file = open(self.html_path, 'rt', encoding='utf-8')
-        except IOError:
-            raise IOError("Invalid or missing html file path.")
-
-        html_content = html_file.read()
-        if not html_content:
-            raise Exception("The html file is empty.")
+        
+        if not self.html_template:
+            with open(self.html_path, 'rt', encoding='utf-8') as html_file:
+                html_content = html_file.read()
+                if not html_content:
+                    raise Exception("The html file is empty.")
+                else:
+                    self.html_template = string.Template(html_content)
 
         # replace all placeolders associated to recipient_data keys
         if recipient_data:
-            for key, value in recipient_data.items():
-                placeholder = "<!--%s-->" % key
-                html_content = html_content.replace(placeholder, value)
-
-        return html_content
+            return self.html_template.substitute(recipient_data)
+        
+        return self.html_template.template
 
     def _form_email(self, recipient_data):
         """
@@ -127,40 +122,36 @@ class PyMailer():
         if not csv_path:
             csv_path = self.csv_path
 
-        try:
-            csv_file = open(csv_path, 'r+t', encoding='utf-8')
-        except IOError:
-            raise IOError("Invalid or missing csv file path.")
+        with open(csv_path, 'r+t', encoding='utf-8') as csv_file:
+            csv_reader = csv.reader(csv_file)
 
-        csv_reader = csv.reader(csv_file)
+            """
+            Invalid emails ignored
+            """
+            variables_names = []
+            recipients_list = []
+            for i, row in enumerate(csv_reader):
+                # Get header keys
+                if i == 0:
+                    for cell in row:
+                        variables_names.append(cell)
+                    continue
 
-        """
-        Invalid emails ignored
-        """
-        variables_names = []
-        recipients_list = []
-        for i, row in enumerate(csv_reader):
-            # Get header keys
-            if i == 0:
-                for cell in row:
-                    variables_names.append(cell)
-                continue
-
-            # Get all variables
-            variables = {}
-            for j, var_name in enumerate(variables_names):
-                if var_name == 'email':
-                    if self._validate_email(row[j]):
+                # Get all variables
+                variables = {}
+                for j, var_name in enumerate(variables_names):
+                    if var_name == 'email':
+                        if self._validate_email(row[j]):
+                            variables[var_name] = row[j]
+                            recipients_list.append(variables)
+                        else:
+                            logging.warning('invalid rceiver address <%s> ignored', row[j])
+                    else:
                         variables[var_name] = row[j]
-                        recipients_list.append(variables)
-                else:
-                    variables[var_name] = row[j]
 
-        # clear the contents of the resend csv file
-        if is_resend:
-            csv_file.write('')
-
-        csv_file.close()
+            # clear the contents of the resend csv file
+            if is_resend:
+                csv_file.write('')
 
         return recipients_list
 
@@ -197,30 +188,33 @@ class PyMailer():
 
             for nb in range(0, self.nb_emails_per_recipient):
                 print("Sending to %s..." % recipient_data.get('recipient'))
+
+                if config.ENCRYPT_MODE != 'none' and not self.sslcontext:
+                    self.sslcontext = ssl.create_default_context()
+                
+                if config.ENCRYPT_MODE == 'ssl':
+                    smtp_server = smtplib.SMTP_SSL(host=config.SMTP_HOST, port=config.SMTP_PORT, timeout=10, context=self.sslcontext)
+                else:
+                    smtp_server = smtplib.SMTP(host=config.SMTP_HOST, port=config.SMTP_PORT, timeout=10)
+
                 try:
                     # send the actual email
-                    
-                    if config.ENCRYPT_MODE == 'ssl':
-                        smtp_server = smtplib.SMTP_SSL(host=config.SMTP_HOST, port=config.SMTP_PORT, timeout=10)
-                    else:
-                        smtp_server = smtplib.SMTP(host=config.SMTP_HOST, port=config.SMTP_PORT, timeout=10)
-
                     if config.ENCRYPT_MODE != 'none':
                         smtp_server.ehlo()
                         if config.ENCRYPT_MODE == 'starttls':
-                            smtp_server.starttls()
+                            smtp_server.starttls(context=self.sslcontext)
                             smtp_server.ehlo()
 
                     if config.SMTP_USER and config.SMTP_PASSWORD:
                         smtp_server.login(config.SMTP_USER, config.SMTP_PASSWORD)
 
                     smtp_server.sendmail(recipient_data.get('sender'), recipient_data.get('recipient'), message)
-                    smtp_server.close()
                     # save the last recipient to the stats file incase the process fails
                     self._stats("LAST RECIPIENT: %s" % recipient_data.get('recipient'))
 
                     # allow the system to sleep for .25 secs to take load off the SMTP server
-                    sleep(1)
+                finally:
+                    smtp_server.quit()
                 except smtplib.SMTPException as e:
                     print("EXCEPTION")
                     print(repr(e))
@@ -230,6 +224,7 @@ class PyMailer():
                     # save the number of failed recipients to the stats file
                     failed_recipients = failed_recipients + 1
                     self._stats("FAILED RECIPIENTS: %s" % failed_recipients)
+                sleep(config.SLEEP_TIME)
 
     def send_test(self):
         self.send(recipient_list=config.TEST_RECIPIENTS)
@@ -250,24 +245,29 @@ def main(sys_args):
 
     if not os.path.exists(config.STATS_FILE):
         open(config.STATS_FILE, 'w').close()
+        
+    argparser = argparse.ArgumentParser(prog='pymailer')
+    argparser.add_argument("html_path", help="HTML template path")
+    argparser.add_argument("csv_path", help="csv path")
+    argparser.add_argument("subject", help="subject")
+    
+    actiongroup = argparser.add_mutually_exclusive_group(required=True)
+    actiongroup.add_argument("-t", "--test", help="send test mail to receiver in config file", action="store_true")
+    actiongroup.add_argument("-s", "--send", help="send mail to receivers in csv file", action="store_true")
+    
+    args = argparser.parse_args()
 
-    try:
-        action, html_path, csv_path, subject = sys_args
-    except ValueError:
-        print("Not enough argumants supplied. PyMailer requests 1 option and 3 arguments: ./pymailer -s html_path csv_path subject")
-        sys.exit()
-
-    if os.path.splitext(html_path)[1] != '.html':
+    if not os.path.exists(args.html_path):
         print("The html_path argument doesn't seem to contain a valid html file.")
         sys.exit()
 
-    if os.path.splitext(csv_path)[1] != '.csv':
+    if not os.path.exists(args.csv_path):
         print("The csv_path argument doesn't seem to contain a valid csv file.")
         sys.exit()
 
-    pymailer = PyMailer(html_path, csv_path, subject)
+    pymailer = PyMailer(args.html_path, args.csv_path, args.subject)
     
-    if action == '-s':
+    if args.send:
         if input("You are about to send to %s recipients. Do you want to continue (yes/no)? " % pymailer.count_recipients()) == 'yes':
             # save the csv file used to the stats file
             pymailer._stats("CSV USED: %s" % csv_path)
@@ -279,7 +279,7 @@ def main(sys_args):
             print("Aborted.")
             sys.exit()
 
-    elif action == '-t':
+    elif args.test:
         if input("You are about to send a test mail to all recipients as specified in config.py. Do you want to continue (yes/no)? ") == 'yes':
             pymailer.send_test()
         else:

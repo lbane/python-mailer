@@ -25,6 +25,9 @@ FROM_EMAIL = 'company@example.com'
 # The number of emails to send to each recipient
 NB_EMAILS_PER_RECIPIENT = 1
 
+# Time between mailings
+SLEEP_TIME = 1
+
 # test recipients list
 TEST_RECIPIENTS = [
     {'name': 'Name', 'email': 'someone@example.com'},
