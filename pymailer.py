@@ -128,7 +128,9 @@ class PyMailer():
             csv_path = self.csv_path
 
         with open(csv_path, 'r+t', encoding='utf-8') as csv_file:
-            csv_reader = csv.reader(csv_file)
+            csv_dialect = csv.Sniffer().sniff(csv_file.read(1024))
+            csvfile.seek(0)
+            csv_reader = csv.reader(csvfile, csv_dialect)
 
             """
             Invalid emails ignored
