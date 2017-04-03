@@ -79,11 +79,8 @@ class PyMailer():
         Write failed recipient_data to csv file to be retried again later.
         """
         with open(config.CSV_RETRY_FILENAME, 'w+', encoding='utf-8', newline='') as csv_file:
-            csv_writer = csv.writer(csv_file)
-            csv_writer.writerow([
-                recipient_data.get('name'),
-                recipient_data.get('email')
-            ])
+            csv_writer = csv.DictWriter(csv_file, fieldnames=self.variable_names)
+            csv_writer.writerow(recipient_data)
 
     def _html_parser(self, recipient_data):
         """
@@ -129,24 +126,24 @@ class PyMailer():
 
         with open(csv_path, 'r+t', encoding='utf-8') as csv_file:
             csv_dialect = csv.Sniffer().sniff(csv_file.read(1024))
-            csvfile.seek(0)
-            csv_reader = csv.reader(csvfile, csv_dialect)
+            csv_file.seek(0)
+            csv_reader = csv.reader(csv_file, csv_dialect)
 
             """
             Invalid emails ignored
             """
-            variables_names = []
+            self.variables_names = []
             recipients_list = []
             for i, row in enumerate(csv_reader):
                 # Get header keys
-                if i == 0:
+                if i == 0 and not is_resend:
                     for cell in row:
-                        variables_names.append(cell)
+                        self.variables_names.append(cell)
                     continue
 
                 # Get all variables
                 variables = {}
-                for j, var_name in enumerate(variables_names):
+                for j, var_name in enumerate(self.variables_names):
                     if var_name == 'email':
                         if self._validate_email(row[j]):
                             variables[var_name] = row[j]
@@ -159,6 +156,10 @@ class PyMailer():
             # clear the contents of the resend csv file
             if is_resend:
                 csv_file.write('')
+            else:
+                with open(config.CSV_RETRY_FILENAME, 'w+', encoding='utf-8', newline='') as csv_file:
+                    csv_writer = csv.DictWriter(csv_file, fieldnames=self.variables_names)
+                    csv_writer.writeheader()
 
         return recipients_list
 
@@ -277,7 +278,7 @@ def main(sys_args):
     if args.send:
         if input("You are about to send to %s recipients. Do you want to continue (yes/no)? " % pymailer.count_recipients()) == 'yes':
             # save the csv file used to the stats file
-            pymailer._stats("CSV USED: %s" % csv_path)
+            pymailer._stats("CSV USED: %s" % args.csv_path)
 
             # send the email and try resend to failed recipients
             pymailer.send()
